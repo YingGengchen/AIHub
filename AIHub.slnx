@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="AIHub/AIHub.csproj">
+    <Deploy />
+  </Project>
+</Solution>

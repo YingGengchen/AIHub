@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+
+  <Commands package="guidAIHubPackage">
+	<Groups>
+	  <Group guid="guidAIHubCmdSet" id="AIHubMenuGroup" priority="0x0700">
+		<Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" />
+	  </Group>
+	</Groups>
+
+	<Buttons>
+	  <Button guid="guidAIHubCmdSet" id="cmdidOpenProxyPanel" priority="0x0100" type="Button">
+		<Parent guid="guidAIHubCmdSet" id="AIHubMenuGroup" />
+		<Strings>
+		  <ButtonText>AI Hub 代理设置...</ButtonText>
+		  <CommandName>AIHub.OpenProxyPanel</CommandName>
+		</Strings>
+	  </Button>
+	</Buttons>
+  </Commands>
+
+  <Symbols>
+	<GuidSymbol name="guidAIHubPackage" value="{04096e46-d5fb-4bdc-873c-08f579b92205}" />
+
+	<GuidSymbol name="guidAIHubCmdSet" value="{7f6b2f0a-8a0e-4b63-9a3f-0c7d5e6a1b21}">
+	  <IDSymbol name="AIHubMenuGroup" value="0x1020" />
+	  <IDSymbol name="cmdidOpenProxyPanel" value="0x0100" />
+	</GuidSymbol>
+  </Symbols>
+
+</CommandTable>

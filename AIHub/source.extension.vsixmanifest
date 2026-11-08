@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
+  <Metadata>
+    <Identity Id="AIHub.d1fe5541-f31e-4e88-8a31-0e8d5089c988" Version="1.1" Language="en-US" Publisher="AIHub" />
+    <DisplayName>AI Hub 代理</DisplayName>
+    <Description>在 Visual Studio 内运行本地 Ollama 兼容代理，让 Copilot Chat 通过 BYOK 使用 DeepSeek、Kimi、SiliconFlow 等 OpenAI 兼容大模型。无需安装 Python，内置 1M 上下文的模型声明、流式输出与工具调用转发。</Description>
+    <Icon>icon.png</Icon>
+    <Tags>ollama, openai, anthropic, copilot, byok, deepseek, proxy, localhost</Tags>
+  </Metadata>
+  <Installation>
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.14, )">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+    <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[17.14, )">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+    <InstallationTarget Id="Microsoft.VisualStudio.Enterprise" Version="[17.14, )">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+  </Installation>
+  <Dependencies>
+    <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" d:Source="Manual" Version="[4.5,)" />
+  </Dependencies>
+  <Prerequisites>
+    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.14, )" DisplayName="Visual Studio core editor" />
+  </Prerequisites>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="Project" d:ProjectName="%CurrentProject%" Path="|%CurrentProject%;PkgdefProjectOutputGroup|" />
+  </Assets>
+</PackageManifest>
