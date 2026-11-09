@@ -429,7 +429,7 @@ namespace AIHub.ToolWindows
                     ShowInfo(
                         $"端口 {host.Port} 已由{host.Describe()}的 AI Hub 代理托管，无需重复启动。" +
                         Environment.NewLine + Environment.NewLine +
-                        "关闭那个 Visual Studio 实例后，本实例会自动接管端口。");
+                        "关闭那个 Visual Studio 实例后，本实例会立刻接管端口，不用重新启动。");
                     return;
                 }
             }
@@ -514,13 +514,7 @@ namespace AIHub.ToolWindows
             try
             {
                 _service.SaveAndApply(_working);
-
-                if (_service.Server.IsRunning)
-                {
-                    _service.Stop();
-                }
-
-                _service.Start();
+                _service.Restart();
 
                 if (_service.IsHostedByOtherInstance)
                 {
@@ -1125,7 +1119,7 @@ namespace AIHub.ToolWindows
             else if (host != null)
             {
                 var tip = $"端口 {host.Port} 由{host.Describe()}的 AI Hub 代理托管，无需在本实例重复启动。"
-                    + Environment.NewLine + "关闭那个 Visual Studio 实例后，本实例会自动接管端口。";
+                    + Environment.NewLine + "那个实例退出后，本实例会立刻接管端口，不用重新启动。";
 
                 StatusText.Text = "其它实例托管";
                 StatusText.ToolTip = tip;
