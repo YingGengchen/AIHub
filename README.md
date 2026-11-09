@@ -41,6 +41,8 @@ dotnet build AIHub.slnx -c Release
 
 ## 安装
 
+不需要自己编译：从 [Releases](https://github.com/YingGengchen/AIHub/releases/latest) 下载 `AIHub.vsix` 即可。
+
 1. 关闭 Visual Studio。
 2. 双击 `AIHub.vsix` 即可；命令行安装则用 VS 安装目录下的 `VSIXInstaller.exe`：
 
