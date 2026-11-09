@@ -51,6 +51,11 @@ namespace AIHub.ToolWindows
             StartStopButton.Click += (_, __) => OnStartStopClicked();
             SaveButton.Click += (_, __) => OnSaveClicked();
             RestartButton.Click += (_, __) => OnRestartClicked();
+
+            // 被其它实例托管时按钮会禁用，仍需能显示原因。
+            ToolTipService.SetShowOnDisabled(StartStopButton, true);
+            ToolTipService.SetShowOnDisabled(RestartButton, true);
+
             CopyAddressButton.Click += (_, __) => OnCopyAddressClicked();
             OpenConfigButton.Click += (_, __) => OpenPath(ProxyPaths.RootDirectory);
             ClearLogButton.Click += (_, __) => OnClearLogClicked();
@@ -92,7 +97,8 @@ namespace AIHub.ToolWindows
             }
 
             _subscribed = true;
-            _service.Server.StateChanged += OnServerStateChanged;
+            _service.StateChanged += OnServerStateChanged;
+            _service.ConfigReloaded += OnConfigReloaded;
             _service.Logger.LineLogged += OnLogLine;
             ThemePalette.Changed += OnThemeChanged;
 
@@ -108,7 +114,8 @@ namespace AIHub.ToolWindows
             }
 
             _subscribed = false;
-            _service.Server.StateChanged -= OnServerStateChanged;
+            _service.StateChanged -= OnServerStateChanged;
+            _service.ConfigReloaded -= OnConfigReloaded;
             _service.Logger.LineLogged -= OnLogLine;
             ThemePalette.Changed -= OnThemeChanged;
         }
@@ -413,6 +420,20 @@ namespace AIHub.ToolWindows
                 return;
             }
 
+            if (_service.IsHostedByOtherInstance)
+            {
+                // 另一个实例在托管：先确认它还活着，否则本实例接管。
+                var host = ProxyServer.ProbeHost(_service.Config.Port);
+                if (host != null)
+                {
+                    ShowInfo(
+                        $"端口 {host.Port} 已由{host.Describe()}的 AI Hub 代理托管，无需重复启动。" +
+                        Environment.NewLine + Environment.NewLine +
+                        "关闭那个 Visual Studio 实例后，本实例会自动接管端口。");
+                    return;
+                }
+            }
+
             if (!TryApplyUiToWorking(out var error))
             {
                 ShowError(error);
@@ -422,7 +443,23 @@ namespace AIHub.ToolWindows
             try
             {
                 _service.SaveAndApply(_working);
+
+                if (_service.IsHostedByOtherInstance)
+                {
+                    UpdateStatus();
+                    AppendLog($"端口 {_working.Port} 仍由其它实例托管，未重复启动。");
+                    return;
+                }
+
                 _service.Start();
+
+                if (_service.IsHostedByOtherInstance)
+                {
+                    UpdateStatus();
+                    AppendLog($"端口 {_working.Port} 已有其它实例的代理在运行，已复用该实例。");
+                    return;
+                }
+
                 UpdateLogState();
                 AppendLog($"代理已启动：http://localhost:{_working.Port}");
             }
@@ -455,6 +492,19 @@ namespace AIHub.ToolWindows
 
         private void OnRestartClicked()
         {
+            if (_service.IsHostedByOtherInstance)
+            {
+                var host = ProxyServer.ProbeHost(_service.Config.Port);
+                if (host != null)
+                {
+                    ShowInfo(
+                        $"端口 {host.Port} 已由{host.Describe()}的 AI Hub 代理托管，本实例无法重启它。" +
+                        Environment.NewLine + Environment.NewLine +
+                        "请在那个 Visual Studio 实例中点击“重启代理”。");
+                    return;
+                }
+            }
+
             if (!TryApplyUiToWorking(out var error))
             {
                 ShowError(error);
@@ -471,6 +521,14 @@ namespace AIHub.ToolWindows
                 }
 
                 _service.Start();
+
+                if (_service.IsHostedByOtherInstance)
+                {
+                    UpdateStatus();
+                    AppendLog($"端口 {_working.Port} 已有其它实例的代理在运行，已复用该实例。");
+                    return;
+                }
+
                 UpdateLogState();
                 AppendLog($"代理已重启：http://localhost:{_working.Port}");
             }
@@ -975,6 +1033,16 @@ namespace AIHub.ToolWindows
             RunOnUi(UpdateStatus);
         }
 
+        private void OnConfigReloaded()
+        {
+            RunOnUi(() =>
+            {
+                _working = _service.Config.Clone();
+                LoadFromConfig();
+                AppendLog("其它实例修改了配置，已重新载入。");
+            });
+        }
+
         private void OnLogLine(string line)
         {
             RunOnUi(() => AppendLog(line));
@@ -1031,13 +1099,17 @@ namespace AIHub.ToolWindows
         private void UpdateStatus()
         {
             var running = _service.Server.IsRunning;
+            var host = running ? null : _service.HostedBy;
             var error = _service.LastError;
 
-            StatusDot.Fill = Brush(running ? ThemePalette.Success : ThemePalette.Danger);
-            StatusPill.Background = Brush(ThemePalette.Blend(
-                ThemePalette.Background,
-                running ? ThemePalette.Success : ThemePalette.Danger,
-                0.18));
+            var accent = running
+                ? ThemePalette.Success
+                : host != null
+                    ? ThemePalette.Accent
+                    : ThemePalette.Danger;
+
+            StatusDot.Fill = Brush(accent);
+            StatusPill.Background = Brush(ThemePalette.Blend(ThemePalette.Background, accent, 0.18));
 
             if (running)
             {
@@ -1045,6 +1117,24 @@ namespace AIHub.ToolWindows
                 StatusText.ToolTip = null;
                 StartStopButton.Content = "停止代理";
                 StartStopButton.Style = (Style)Resources["BaseButton"];
+                StartStopButton.IsEnabled = true;
+                StartStopButton.ToolTip = null;
+                RestartButton.IsEnabled = true;
+                RestartButton.ToolTip = null;
+            }
+            else if (host != null)
+            {
+                var tip = $"端口 {host.Port} 由{host.Describe()}的 AI Hub 代理托管，无需在本实例重复启动。"
+                    + Environment.NewLine + "关闭那个 Visual Studio 实例后，本实例会自动接管端口。";
+
+                StatusText.Text = "其它实例托管";
+                StatusText.ToolTip = tip;
+                StartStopButton.Content = "启动代理";
+                StartStopButton.Style = (Style)Resources["PrimaryButton"];
+                StartStopButton.IsEnabled = false;
+                StartStopButton.ToolTip = tip;
+                RestartButton.IsEnabled = false;
+                RestartButton.ToolTip = tip;
             }
             else if (!string.IsNullOrEmpty(error))
             {
@@ -1052,6 +1142,10 @@ namespace AIHub.ToolWindows
                 StatusText.ToolTip = error;
                 StartStopButton.Content = "启动代理";
                 StartStopButton.Style = (Style)Resources["PrimaryButton"];
+                StartStopButton.IsEnabled = true;
+                StartStopButton.ToolTip = null;
+                RestartButton.IsEnabled = true;
+                RestartButton.ToolTip = null;
             }
             else
             {
@@ -1059,9 +1153,13 @@ namespace AIHub.ToolWindows
                 StatusText.ToolTip = null;
                 StartStopButton.Content = "启动代理";
                 StartStopButton.Style = (Style)Resources["PrimaryButton"];
+                StartStopButton.IsEnabled = true;
+                StartStopButton.ToolTip = null;
+                RestartButton.IsEnabled = true;
+                RestartButton.ToolTip = null;
             }
 
-            PortBox.IsEnabled = !running;
+            PortBox.IsEnabled = !running && host == null;
             UpdateEndpointText();
         }
 

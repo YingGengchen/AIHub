@@ -119,7 +119,7 @@ namespace AIHub
             {
                 try
                 {
-                    ProxyService.Instance.Stop();
+                    ProxyService.Instance.Shutdown();
                 }
                 catch (Exception)
                 {

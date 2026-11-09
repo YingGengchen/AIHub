@@ -173,7 +173,7 @@ namespace AIHub.Proxy
 
                 if (!hasLoopbackPrefix)
                 {
-                    throw new InvalidOperationException(DescribeListenerError(ex, port), ex);
+                    throw BuildStartException(ex, port);
                 }
 
                 var fallback = new HttpListener();
@@ -187,9 +187,84 @@ namespace AIHub.Proxy
                 catch (Exception fallbackEx)
                 {
                     fallback.Close();
-                    throw new InvalidOperationException(DescribeListenerError(fallbackEx, port), fallbackEx);
+                    throw BuildStartException(fallbackEx, port);
                 }
             }
+        }
+
+        /// <summary>
+        /// 端口冲突时先探测占用者：如果是另一个 AI Hub 实例，就抛专用异常让上层复用。
+        /// </summary>
+        private static Exception BuildStartException(Exception exception, int port)
+        {
+            if (IsPortInUseError(exception))
+            {
+                var host = ProbeHost(port);
+                if (host != null)
+                {
+                    return new ProxyAlreadyHostedException(host);
+                }
+            }
+
+            return new InvalidOperationException(DescribeListenerError(exception, port), exception);
+        }
+
+        /// <summary>
+        /// 探测指定端口上是否已有 AI Hub 代理在运行；返回 null 表示没有（或是别的程序）。
+        /// </summary>
+        public static ProxyHostInfo? ProbeHost(int port, int timeoutMs = 700)
+        {
+            if (port <= 0 || port > 65535)
+            {
+                return null;
+            }
+
+            try
+            {
+                var request = (HttpWebRequest)WebRequest.Create($"http://localhost:{port}/health");
+                request.Method = "GET";
+                request.Timeout = timeoutMs;
+                request.ReadWriteTimeout = timeoutMs;
+                request.Proxy = null;
+                request.KeepAlive = false;
+                request.AllowAutoRedirect = false;
+                request.UserAgent = "AIHub-Probe";
+
+                using (var response = (HttpWebResponse)request.GetResponse())
+                using (var stream = response.GetResponseStream())
+                using (var reader = new StreamReader(stream, Encoding.UTF8))
+                {
+                    var body = reader.ReadToEnd();
+                    var json = JObject.Parse(body);
+
+                    var product = (string?)json["product"];
+                    if (!string.Equals(product, "aihub", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return null;
+                    }
+
+                    return new ProxyHostInfo(
+                        port,
+                        json.Value<int?>("pid") ?? 0,
+                        (string?)json["version"] ?? string.Empty);
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        private static bool IsPortInUseError(Exception exception)
+        {
+            var listenerException = exception as HttpListenerException;
+            var code = listenerException?.ErrorCode ?? 0;
+            var message = exception.Message ?? string.Empty;
+
+            return code == 183 || code == 32 || code == 10048
+                || message.IndexOf("already", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("正在使用", StringComparison.Ordinal) >= 0
+                || message.IndexOf("in use", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static string DescribeListenerError(Exception exception, int port)
@@ -198,10 +273,7 @@ namespace AIHub.Proxy
             var code = listenerException?.ErrorCode ?? 0;
             var message = exception.Message ?? string.Empty;
 
-            if (code == 183 || code == 32 || code == 10048
-                || message.IndexOf("already", StringComparison.OrdinalIgnoreCase) >= 0
-                || message.IndexOf("正在使用", StringComparison.Ordinal) >= 0
-                || message.IndexOf("in use", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (IsPortInUseError(exception))
             {
                 return $"端口 {port} 已被占用。请关闭占用该端口的程序（例如 Ollama 或旧代理进程），或在本面板中改用其它端口。";
             }
@@ -1183,7 +1255,10 @@ namespace AIHub.Proxy
             return new JObject
             {
                 ["status"] = "ok",
+                ["product"] = "aihub",
                 ["version"] = "1.2",
+                ["pid"] = Process.GetCurrentProcess().Id,
+                ["port"] = _config.Port,
                 ["models_registered"] = _config.Models.Count,
                 ["providers"] = new JArray(_config.Providers.Keys.ToArray<object>()),
             };
